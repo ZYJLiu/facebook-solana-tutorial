@@ -43,6 +43,41 @@ pub mod programs {
         Ok(())
     }
 
+    /// Create comment for post
+    /// @param text:            text of comment
+    /// @param commenter_name:  name of comment creator
+    /// @param commenter_url:   url of comment creator avatar
+    pub fn create_comment(
+        ctx: Context<CreateComment>,
+        text: String,
+        commenter_name: String,
+        commenter_url: String,
+    ) -> Result<()> {
+
+        // Get post
+        let post = &mut ctx.accounts.post;
+
+        // Get comment
+        let comment = &mut ctx.accounts.comment;
+        // Set authority to comment
+        comment.authority = ctx.accounts.authority.key();
+        // Set comment text
+        comment.text = text;
+        // Set commenter name
+        comment.commenter_name = commenter_name;
+        // Set commenter url
+        comment.commenter_url = commenter_url;
+        // Set comment index to post's comment count
+        comment.index = post.comment_count;
+        // Set post time
+        comment.post_time = ctx.accounts.clock.unix_timestamp;
+
+        // Increase post's comment count by 1
+        post.comment_count += 1;
+
+        Ok(())
+    }
+
 }
 
 #[derive(Accounts)]
@@ -96,6 +131,38 @@ pub struct CreatePost<'info>{
     pub clock: Sysvar <'info, Clock>,
 }
 
+/// CreateComment context
+#[derive(Accounts)]
+pub struct CreateComment<'info> {
+    // Authenticate post account
+    #[account(mut, seeds = [b"post".as_ref(), post.index.to_be_bytes().as_ref()], bump)]
+    pub post: Account<'info, PostAccount>,
+
+    // Authenticate comment account
+    #[account(
+        init,
+        // Post account use string "comment", index of post and index of comment per post as seeds
+        seeds = [b"comment".as_ref(), post.index.to_be_bytes().as_ref(), post.comment_count.to_be_bytes().as_ref()],
+        bump,
+        payer = authority,
+        space = 8 + TEXT_LENGTH + USER_NAME_LENGTH + USER_URL_LENGTH + 1000
+    )]
+    pub comment: Account<'info, CommentAccount>,
+
+    // Authority (this is signer who paid transaction fee)
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    /// System program
+    pub system_program: Program<'info, System>,
+
+    // Token program
+    pub token_program: Program<'info, Token>,
+
+    // Clock to save time
+    pub clock: Sysvar<'info, Clock>,
+}
+
 
 #[account]
 pub struct StateAccount{
@@ -112,4 +179,26 @@ pub struct PostAccount {
     pub comment_count: u64,
     pub index: u64,
     pub post_timer: i64,
+}
+
+// Comment Account Structure
+#[account]
+pub struct CommentAccount {
+    // Signer address
+    pub authority: Pubkey,
+
+    // Comment text
+    pub text: String,
+
+    // commenter_name
+    pub commenter_name: String,
+
+    // commenter_url
+    pub commenter_url: String,
+
+    // Comment index
+    pub index: u64,
+
+    // Post time
+    pub post_time: i64,
 }
